@@ -91,9 +91,9 @@
   <!-- Pure Core glTF 2.0 (4 materials, 0 extensions) + Native USDZ for seamless Android WebXR, Scene Viewer & iOS Quick Look -->
   <model-viewer
     id="mv"
-    src="assets/cota_austin_scaled.glb"
-    ios-src="assets/cota_austin_scaled.usdz"
-    poster="assets/poster.png"
+    src="assets/cota_austin_scaled.glb?v=2"
+    ios-src="assets/cota_austin_scaled.usdz?v=2"
+    poster="assets/poster.png?v=2"
     alt="Full-scale Circuit of the Americas Austin Texas F1 Tabletop AR Diorama"
     ar
     ar-modes="webxr scene-viewer quick-look"
@@ -125,7 +125,7 @@
     const isAndroid = /Android/i.test(navigator.userAgent || '');
 
     if (isAndroid) {
-      const glbAbs = new URL('assets/cota_austin_scaled.glb', window.location.href).href;
+      const glbAbs = new URL('assets/cota_austin_scaled.glb?v=2', window.location.href).href;
       altBtn.href = `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glbAbs)}&mode=ar_preferred&resizable=true&title=${encodeURIComponent('F1 COTA Austin Tabletop AR')}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(window.location.href)};end;`;
       altBtn.classList.add('show');
     }

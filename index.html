@@ -203,8 +203,8 @@
   <div class="hud-bottom">
     <div class="bottom-actions">
       <!-- Native iOS Quick Look 1-tap anchor (shown on iPhone/iPad) -->
-      <a id="ios-ar-link" rel="ar" href="assets/cota_austin_scaled.usdz" class="ar-btn" style="display:none;">
-        <img src="assets/poster.png" alt="" style="display:none;" />
+      <a id="ios-ar-link" rel="ar" href="assets/cota_austin_scaled.usdz?v=2" class="ar-btn" style="display:none;">
+        <img src="assets/poster.png?v=2" alt="" style="display:none;" />
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.74 8 12 11.82 5.26 8 12 4.18zM5 9.65l6 3.33v6.54l-6-3.33V9.65zm8 9.87v-6.54l6-3.33v6.54l-6 3.33z"/></svg>
         Place on Table (AR)
       </a>
@@ -472,7 +472,7 @@
     const gltfLoader = new GLTFLoader();
 
     gltfLoader.load(
-      'assets/cota_austin_scaled.glb',
+      'assets/cota_austin_scaled.glb?v=2',
       (gltf) => {
         const root = gltf.scene;
         root.traverse((obj) => {
