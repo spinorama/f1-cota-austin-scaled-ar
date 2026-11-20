@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>F1 COTA Austin (Full Scale) · Tabletop AR &amp; Onboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #10151d;
+      color: #f4f6f8;
+      user-select: none;
+    }
+    #canvas-wrap { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+
+    #loader {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: radial-gradient(circle at 50% 40%, #1c2838 0%, #0e131b 100%);
+      transition: opacity 0.35s ease;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    .loader-title { font-size: 18px; font-weight: 700; letter-spacing: 0.04em; }
+    .loader-sub { font-size: 12px; color: rgba(244,246,248,0.68); }
+    .loader-bar {
+      width: 230px; height: 4px; border-radius: 99px;
+      background: rgba(255,255,255,0.12); overflow: hidden;
+    }
+    .loader-fill { width: 15%; height: 100%; background: #e10600; transition: width 0.2s ease; }
+
+    .hud-top {
+      position: fixed;
+      top: max(14px, env(safe-area-inset-top));
+      left: 14px; right: 14px;
+      z-index: 20;
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px;
+      pointer-events: none;
+    }
+    .hud-group {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      pointer-events: auto;
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 13px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.76);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      font-size: 13px; font-weight: 600; color: #f4f6f8;
+    }
+    .dot-red {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #e10600; box-shadow: 0 0 8px rgba(225, 6, 0, 0.85);
+    }
+    .seg {
+      display: inline-flex; padding: 3px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.78);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+    }
+    .seg button, .icon-btn {
+      border: none; background: transparent;
+      color: rgba(244, 246, 248, 0.80);
+      font-size: 12px; font-weight: 600;
+      padding: 6px 12px; border-radius: 999px;
+      cursor: pointer; transition: background 0.15s ease, color 0.15s ease;
+    }
+    .seg button.active { background: #e10600; color: #fff; }
+    .seg button:hover:not(.active), .icon-btn:hover { background: rgba(255,255,255,0.10); color: #fff; }
+    .icon-btn {
+      background: rgba(13, 18, 26, 0.76);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      padding: 7px 12px;
+    }
+    .icon-btn.active { border-color: rgba(225, 6, 0, 0.72); color: #fff; }
+
+    #driver-banner {
+      position: fixed;
+      top: max(62px, calc(env(safe-area-inset-top) + 48px));
+      left: 14px; z-index: 20;
+      display: none; align-items: center; gap: 10px;
+      padding: 8px 14px; border-radius: 12px;
+      background: rgba(13, 18, 26, 0.82);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.14);
+      pointer-events: none;
+    }
+    #driver-banner.show { display: inline-flex; }
+    .team-bar { width: 4px; height: 28px; border-radius: 4px; }
+    .drv-name { font-size: 14px; font-weight: 700; line-height: 1.15; }
+    .drv-team { font-size: 11px; color: rgba(244,246,248,0.72); }
+
+    .hud-bottom {
+      position: fixed;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      left: 12px; right: 12px; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      pointer-events: none;
+    }
+    .bottom-actions {
+      display: flex; align-items: center; gap: 10px;
+      pointer-events: auto;
+    }
+    .ar-btn {
+      display: inline-flex; align-items: center; gap: 9px;
+      padding: 11px 22px; border: none; border-radius: 999px;
+      background: #e10600; color: #fff;
+      font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
+      text-decoration: none; cursor: pointer;
+      box-shadow: 0 8px 24px rgba(225, 6, 0, 0.44);
+      transition: transform 0.14s ease, background 0.14s ease;
+    }
+    .ar-btn:hover { background: #ff1e17; transform: translateY(-1px); }
+    .ar-btn:active { transform: scale(0.97); }
+    .ar-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+    .drivers-bar {
+      display: flex; align-items: center; gap: 6px;
+      max-width: 100%; overflow-x: auto;
+      padding: 6px 8px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.80);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      pointer-events: auto; scrollbar-width: none;
+    }
+    .drivers-bar::-webkit-scrollbar { display: none; }
+    .drv-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.10);
+      background: rgba(255,255,255,0.05);
+      color: #f4f6f8; font-size: 12px; font-weight: 700;
+      cursor: pointer; white-space: nowrap;
+      transition: background 0.14s ease, border-color 0.14s ease;
+    }
+    .drv-chip:hover { background: rgba(255,255,255,0.14); }
+    .drv-chip.active { background: rgba(225, 6, 0, 0.90); border-color: rgba(255,255,255,0.45); }
+    .drv-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .drv-num { opacity: 0.72; font-weight: 600; font-size: 11px; }
+
+    .keys-hint {
+      font-size: 11px; color: rgba(244, 246, 248, 0.76);
+      background: rgba(13, 18, 26, 0.65);
+      padding: 4px 10px; border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    @media (max-width: 640px) { .keys-hint { display: none; } }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="loader">
+    <div class="loader-title">COTA · Austin, Texas (Full Scale)</div>
+    <div class="loader-sub">Loading 20-turn circuit &amp; Top 10 F1 grid…</div>
+    <div class="loader-bar"><div class="loader-fill" id="loader-fill"></div></div>
+  </div>
+
+  <div id="canvas-wrap"></div>
+
+  <div class="hud-top">
+    <div class="hud-group">
+      <div class="pill"><span class="dot-red"></span>COTA · Austin, TX</div>
+      <div class="seg" role="group" aria-label="Camera mode">
+        <button id="btn-orbit" class="active" type="button">Tabletop</button>
+        <button id="btn-onboard" type="button">Car Onboard</button>
+        <button id="btn-chase" type="button">Chase</button>
+      </div>
+    </div>
+    <div class="hud-group">
+      <button id="btn-sky" class="icon-btn active" type="button" title="Toggle Texas Skybox (B)">Texas Sky</button>
+      <button id="btn-play" class="icon-btn" type="button" title="Pause / Play (Space)">Pause</button>
+      <button id="btn-reset" class="icon-btn" type="button" title="Reset Camera (R)">Reset</button>
+    </div>
+  </div>
+
+  <div id="driver-banner">
+    <div class="team-bar" id="banner-bar"></div>
+    <div>
+      <div class="drv-name" id="banner-name"></div>
+      <div class="drv-team" id="banner-team"></div>
+    </div>
+  </div>
+
+  <div class="hud-bottom">
+    <div class="bottom-actions">
+      <!-- Native iOS Quick Look 1-tap anchor (shown on iPhone/iPad) -->
+      <a id="ios-ar-link" rel="ar" href="assets/cota_austin_scaled.usdz" class="ar-btn" style="display:none;">
+        <img src="assets/poster.png" alt="" style="display:none;" />
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.74 8 12 11.82 5.26 8 12 4.18zM5 9.65l6 3.33v6.54l-6-3.33V9.65zm8 9.87v-6.54l6-3.33v6.54l-6 3.33z"/></svg>
+        Place on Table (AR)
+      </a>
+      <!-- Android WebXR + Scene Viewer via dedicated Google <model-viewer> AR page -->
+      <a id="ar-link" href="ar.html" class="ar-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.74 8 12 11.82 5.26 8 12 4.18zM5 9.65l6 3.33v6.54l-6-3.33V9.65zm8 9.87v-6.54l6-3.33v6.54l-6 3.33z"/></svg>
+        Place on Table (AR)
+      </a>
+    </div>
+
+    <div class="drivers-bar" id="drivers-bar" aria-label="Select driver onboard view"></div>
+    <div class="keys-hint">Mouse drag orbit · Scroll zoom · WASD + Q/E fly · 1–0 driver cam · C cycle view · B skybox · Space pause</div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    const DRIVERS = [
+      { id: 'F1_01_ANT', code: 'ANT', num: 12, name: 'Kimi Antonelli',  team: 'Mercedes-AMG PETRONAS', color: '#00d2be' },
+      { id: 'F1_02_VER', code: 'VER', num: 3,  name: 'Max Verstappen',  team: 'Oracle Red Bull Racing', color: '#2b59c3' },
+      { id: 'F1_03_RUS', code: 'RUS', num: 63, name: 'George Russell',  team: 'Mercedes-AMG PETRONAS', color: '#00d2be' },
+      { id: 'F1_04_HAM', code: 'HAM', num: 44, name: 'Lewis Hamilton',  team: 'Scuderia Ferrari HP',    color: '#e8002d' },
+      { id: 'F1_05_LEC', code: 'LEC', num: 16, name: 'Charles Leclerc', team: 'Scuderia Ferrari HP',    color: '#e8002d' },
+      { id: 'F1_06_NOR', code: 'NOR', num: 1,  name: 'Lando Norris',    team: 'McLaren F1 Team',        color: '#ff8000' },
+      { id: 'F1_07_PIA', code: 'PIA', num: 81, name: 'Oscar Piastri',   team: 'McLaren F1 Team',        color: '#ff8000' },
+      { id: 'F1_08_HAD', code: 'HAD', num: 6,  name: 'Isack Hadjar',    team: 'Oracle Red Bull Racing', color: '#2b59c3' },
+      { id: 'F1_09_LAW', code: 'LAW', num: 30, name: 'Liam Lawson',     team: 'Racing Bulls',           color: '#6692ff' },
+      { id: 'F1_10_GAS', code: 'GAS', num: 10, name: 'Pierre Gasly',    team: 'BWT Alpine F1 Team',     color: '#ff87bc' },
+    ];
+
+    // On iOS use direct rel="ar" USDZ Quick Look; on Android & all others route to ar.html (<model-viewer> WebXR + Scene Viewer!)
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOS) {
+      document.getElementById('ios-ar-link').style.display = 'inline-flex';
+      document.getElementById('ar-link').style.display = 'none';
+    }
+
+    const wrap = document.getElementById('canvas-wrap');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    wrap.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111722);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.001, 80);
+    const DEFAULT_CAM_POS = new THREE.Vector3(-0.56, 1.06, 1.56);
+    const DEFAULT_TARGET  = new THREE.Vector3(0.0, 0.06, 0.0);
+    camera.position.copy(DEFAULT_CAM_POS);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.copy(DEFAULT_TARGET);
+    controls.minDistance = 0.22;
+    controls.maxDistance = 5.2;
+    controls.maxPolarAngle = Math.PI * 0.495;
+    controls.update();
+
+    const hemi = new THREE.HemisphereLight(0xd4ebff, 0x3b4d32, 1.05);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight(0xfff5e4, 2.35);
+    sun.position.set(2.2, 3.4, 2.0);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -1.25;
+    sun.shadow.camera.right = 1.25;
+    sun.shadow.camera.top = 0.95;
+    sun.shadow.camera.bottom = -0.95;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far = 9.0;
+    sun.shadow.bias = -0.0004;
+    scene.add(sun);
+
+    const fill = new THREE.DirectionalLight(0x88b8ff, 0.55);
+    fill.position.set(-2.0, 1.5, -1.8);
+    scene.add(fill);
+
+    // Simple Procedural Sunny Texas Skybox Dome
+    const skyGeo = new THREE.SphereGeometry(30, 32, 20);
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        uSunDir: { value: new THREE.Vector3(1.6, 1.1, 1.4).normalize() },
+        uTime:   { value: 0 },
+      },
+      vertexShader: `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uSunDir;
+        uniform float uTime;
+        varying vec3 vDir;
+
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x),
+            f.y
+          );
+        }
+
+        void main() {
+          vec3 d = normalize(vDir);
+          float h = d.y;
+          vec3 zenith  = vec3(0.11, 0.42, 0.82);
+          vec3 midSky  = vec3(0.42, 0.70, 0.94);
+          vec3 horizon = vec3(0.88, 0.92, 0.95);
+          vec3 col;
+          if (h >= 0.0) {
+            col = mix(horizon, midSky, smoothstep(0.0, 0.24, h));
+            col = mix(col, zenith, smoothstep(0.18, 0.85, h));
+            vec2 uv = d.xz / (h + 0.18) * 1.4 + vec2(uTime * 0.008, uTime * 0.003);
+            float c = noise(uv) * 0.65 + noise(uv * 2.3 + 4.1) * 0.35;
+            float cloudMask = smoothstep(0.54, 0.82, c) * smoothstep(0.04, 0.26, h) * (1.0 - smoothstep(0.65, 0.96, h));
+            col = mix(col, vec3(0.98, 0.98, 0.99), cloudMask * 0.52);
+            float sunDot = max(dot(d, uSunDir), 0.0);
+            col += vec3(1.0, 0.88, 0.68) * pow(sunDot, 12.0) * 0.32;
+            col += vec3(1.0, 0.97, 0.88) * smoothstep(0.9985, 0.9996, sunDot) * 1.1;
+          } else {
+            col = mix(horizon * 0.88, vec3(0.30, 0.42, 0.34), smoothstep(0.0, -0.14, h));
+            col = mix(col, vec3(0.11, 0.16, 0.22), smoothstep(-0.14, -0.58, h));
+          }
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+    });
+    const skyDome = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(skyDome);
+
+    let mixer = null;
+    let isPlaying = true;
+    let skyEnabled = true;
+    let camMode = 'orbit';
+    let activeDriverIdx = 0;
+    const carNodes = new Map();
+
+    const _carPos = new THREE.Vector3();
+    const _carQuat = new THREE.Quaternion();
+    const _eyeWorld = new THREE.Vector3();
+    const _lookWorld = new THREE.Vector3();
+    const _carUp = new THREE.Vector3();
+    const _worldUp = new THREE.Vector3(0, 1, 0);
+    const _smoothEye = new THREE.Vector3();
+    const _smoothLook = new THREE.Vector3();
+    let camSnapNeeded = true;
+
+    const driversBar = document.getElementById('drivers-bar');
+    const banner = document.getElementById('driver-banner');
+    const bannerBar = document.getElementById('banner-bar');
+    const bannerName = document.getElementById('banner-name');
+    const bannerTeam = document.getElementById('banner-team');
+
+    function updateUI() {
+      document.getElementById('btn-orbit').classList.toggle('active', camMode === 'orbit');
+      document.getElementById('btn-onboard').classList.toggle('active', camMode === 'onboard');
+      document.getElementById('btn-chase').classList.toggle('active', camMode === 'chase');
+
+      driversBar.querySelectorAll('.drv-chip').forEach((chip, i) => {
+        chip.classList.toggle('active', camMode !== 'orbit' && i === activeDriverIdx);
+      });
+
+      const drv = DRIVERS[activeDriverIdx];
+      if (camMode !== 'orbit' && drv) {
+        bannerBar.style.background = drv.color;
+        bannerName.textContent = `#${drv.num} ${drv.name}`;
+        bannerTeam.textContent = `${drv.team} · ${camMode === 'onboard' ? 'T-Cam Onboard' : 'Chase Cam'}`;
+        banner.classList.add('show');
+      } else {
+        banner.classList.remove('show');
+      }
+
+      controls.enabled = (camMode === 'orbit');
+      camera.fov = camMode === 'onboard' ? 64 : (camMode === 'chase' ? 52 : 45);
+      camera.updateProjectionMatrix();
+    }
+
+    function setMode(mode) {
+      camMode = mode;
+      camSnapNeeded = true;
+      if (mode === 'orbit') controls.update();
+      updateUI();
+    }
+
+    function selectDriver(idx) {
+      activeDriverIdx = ((idx % DRIVERS.length) + DRIVERS.length) % DRIVERS.length;
+      if (camMode === 'orbit') camMode = 'onboard';
+      camSnapNeeded = true;
+      updateUI();
+    }
+
+    DRIVERS.forEach((d, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'drv-chip';
+      btn.innerHTML = `<span class="drv-dot" style="background:${d.color}"></span><span>${d.code}</span><span class="drv-num">#${d.num}</span>`;
+      btn.title = `Ride onboard with #${d.num} ${d.name} (${d.team})`;
+      btn.addEventListener('click', () => selectDriver(i));
+      driversBar.appendChild(btn);
+    });
+
+    document.getElementById('btn-orbit').addEventListener('click', () => setMode('orbit'));
+    document.getElementById('btn-onboard').addEventListener('click', () => setMode('onboard'));
+    document.getElementById('btn-chase').addEventListener('click', () => setMode('chase'));
+
+    const btnSky = document.getElementById('btn-sky');
+    function toggleSky() {
+      skyEnabled = !skyEnabled;
+      skyDome.visible = skyEnabled;
+      btnSky.classList.toggle('active', skyEnabled);
+      btnSky.textContent = skyEnabled ? 'Texas Sky' : 'Dark Studio';
+    }
+    btnSky.addEventListener('click', toggleSky);
+
+    const btnPlay = document.getElementById('btn-play');
+    function togglePlay() {
+      isPlaying = !isPlaying;
+      btnPlay.textContent = isPlaying ? 'Pause' : 'Play';
+    }
+    btnPlay.addEventListener('click', togglePlay);
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      camera.position.copy(DEFAULT_CAM_POS);
+      controls.target.copy(DEFAULT_TARGET);
+      setMode('orbit');
+    });
+
+    const keys = new Set();
+    window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+      const k = e.key.toLowerCase();
+      keys.add(k);
+      if (k === ' ') { e.preventDefault(); togglePlay(); }
+      else if (k === 'b') { toggleSky(); }
+      else if (k === 'r') { camera.position.copy(DEFAULT_CAM_POS); controls.target.copy(DEFAULT_TARGET); setMode('orbit'); }
+      else if (k === 'c') {
+        const order = ['orbit', 'onboard', 'chase'];
+        setMode(order[(order.indexOf(camMode) + 1) % order.length]);
+      } else if (k === '[') { selectDriver(activeDriverIdx - 1); }
+      else if (k === ']') { selectDriver(activeDriverIdx + 1); }
+      else if (k >= '1' && k <= '9') { selectDriver(parseInt(k, 10) - 1); }
+      else if (k === '0') { selectDriver(9); }
+    });
+    window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+
+    const loaderFill = document.getElementById('loader-fill');
+    const loaderEl = document.getElementById('loader');
+    const gltfLoader = new GLTFLoader();
+
+    gltfLoader.load(
+      'assets/cota_austin_scaled.glb',
+      (gltf) => {
+        const root = gltf.scene;
+        root.traverse((obj) => {
+          if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = true;
+          }
+          if (obj.name && obj.name.startsWith('F1_') && !obj.name.includes('Wheels')) {
+            carNodes.set(obj.name, obj);
+          }
+        });
+        scene.add(root);
+        if (gltf.animations && gltf.animations.length > 0) {
+          mixer = new THREE.AnimationMixer(root);
+          mixer.clipAction(gltf.animations[0]).play();
+        }
+        loaderFill.style.width = '100%';
+        setTimeout(() => loaderEl.classList.add('hidden'), 180);
+        updateUI();
+      },
+      (evt) => {
+        if (evt.total > 0) {
+          loaderFill.style.width = `${Math.min(95, Math.round((evt.loaded / evt.total) * 100))}%`;
+        }
+      },
+      (err) => {
+        console.error('Failed to load Scaled COTA track:', err);
+        document.querySelector('.loader-title').textContent = 'Error loading COTA track';
+      }
+    );
+
+    const _fwd = new THREE.Vector3();
+    const _right = new THREE.Vector3();
+    const _move = new THREE.Vector3();
+    function updateKeyboardMove(dt) {
+      if (camMode !== 'orbit' || keys.size === 0) return;
+      _move.set(0, 0, 0);
+      camera.getWorldDirection(_fwd);
+      _fwd.y = 0;
+      if (_fwd.lengthSq() > 1e-6) _fwd.normalize();
+      _right.crossVectors(_fwd, _worldUp).normalize();
+
+      if (keys.has('w') || keys.has('arrowup'))    _move.add(_fwd);
+      if (keys.has('s') || keys.has('arrowdown'))  _move.sub(_fwd);
+      if (keys.has('d') || keys.has('arrowright')) _move.add(_right);
+      if (keys.has('a') || keys.has('arrowleft'))  _move.sub(_right);
+      if (keys.has('e')) _move.y += 0.85;
+      if (keys.has('q')) _move.y -= 0.85;
+
+      if (_move.lengthSq() > 1e-6) {
+        const speed = (keys.has('shift') ? 1.45 : 0.70) * dt;
+        _move.normalize().multiplyScalar(speed);
+        camera.position.add(_move);
+        controls.target.add(_move);
+        camera.position.y = Math.max(0.05, camera.position.y);
+      }
+    }
+
+    // Calibrated for Hero-Scale 4.5cm F1 Cars (glTF bounds: X=[-0.0225..0.0226], Y=[0..0.0119], Z=[-0.0092..0.0092])
+    const LOCAL_EYE_ONBOARD  = new THREE.Vector3(-0.0008, 0.0154, 0.0);
+    const LOCAL_LOOK_ONBOARD = new THREE.Vector3( 0.1180, 0.0085, 0.0);
+    const LOCAL_EYE_CHASE    = new THREE.Vector3(-0.0740, 0.0320, 0.0);
+    const LOCAL_LOOK_CHASE   = new THREE.Vector3( 0.0520, 0.0080, 0.0);
+
+    function updateCarCamera(dt) {
+      if (camMode === 'orbit') return;
+      const drv = DRIVERS[activeDriverIdx];
+      const car = carNodes.get(drv.id);
+      if (!car) return;
+
+      car.updateWorldMatrix(true, false);
+      car.getWorldPosition(_carPos);
+      car.getWorldQuaternion(_carQuat);
+
+      const eyeLocal  = camMode === 'onboard' ? LOCAL_EYE_ONBOARD : LOCAL_EYE_CHASE;
+      const lookLocal = camMode === 'onboard' ? LOCAL_LOOK_ONBOARD : LOCAL_LOOK_CHASE;
+
+      _eyeWorld.copy(eyeLocal).applyQuaternion(_carQuat).add(_carPos);
+      _lookWorld.copy(lookLocal).applyQuaternion(_carQuat).add(_carPos);
+      _carUp.set(0, 1, 0).applyQuaternion(_carQuat).lerp(_worldUp, camMode === 'onboard' ? 0.45 : 0.78).normalize();
+
+      if (camSnapNeeded) {
+        _smoothEye.copy(_eyeWorld);
+        _smoothLook.copy(_lookWorld);
+        camSnapNeeded = false;
+      } else {
+        const alpha = 1.0 - Math.exp(-(camMode === 'onboard' ? 28.0 : 12.0) * dt);
+        _smoothEye.lerp(_eyeWorld, alpha);
+        _smoothLook.lerp(_lookWorld, alpha);
+      }
+
+      camera.position.copy(_smoothEye);
+      camera.up.copy(_carUp);
+      camera.lookAt(_smoothLook);
+    }
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      skyMat.uniforms.uTime.value += dt;
+      if (mixer && isPlaying) mixer.update(dt);
+      if (camMode === 'orbit') {
+        camera.up.copy(_worldUp);
+        updateKeyboardMove(dt);
+        controls.update();
+      } else {
+        updateCarCamera(dt);
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

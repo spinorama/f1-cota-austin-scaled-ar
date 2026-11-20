@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>F1 COTA Austin · Android &amp; iOS Tabletop AR</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: radial-gradient(circle at 50% 35%, #232c38 0%, #10151c 100%);
+      color: #f4f6f8;
+    }
+    model-viewer {
+      width: 100%; height: 100%;
+      --poster-color: transparent;
+      --progress-bar-color: #e10600;
+      --progress-bar-height: 3px;
+    }
+    .top-bar {
+      position: fixed;
+      top: max(16px, env(safe-area-inset-top));
+      left: 16px; right: 16px;
+      z-index: 20;
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      pointer-events: none;
+    }
+    .back-link {
+      pointer-events: auto;
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.78);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.14);
+      color: #fff; font-size: 13px; font-weight: 600;
+      text-decoration: none;
+    }
+    .status-pill {
+      padding: 7px 12px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.74);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 12px; color: rgba(244,246,248,0.82);
+    }
+    .ar-btn {
+      position: fixed;
+      bottom: max(68px, calc(env(safe-area-inset-bottom) + 52px));
+      left: 50%; transform: translateX(-50%);
+      display: inline-flex; align-items: center; gap: 10px;
+      padding: 14px 26px; border: none; border-radius: 999px;
+      background: #e10600; color: #fff;
+      font-size: 15px; font-weight: 700; letter-spacing: 0.02em;
+      cursor: pointer; white-space: nowrap;
+      box-shadow: 0 10px 28px rgba(225, 6, 0, 0.45);
+    }
+    .ar-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+    .android-alt {
+      position: fixed;
+      bottom: max(18px, env(safe-area-inset-bottom));
+      left: 50%; transform: translateX(-50%);
+      z-index: 20;
+      display: none;
+      align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.80);
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #f4f6f8; font-size: 12px; font-weight: 600;
+      text-decoration: none; white-space: nowrap;
+    }
+    .android-alt.show { display: inline-flex; }
+    .desktop-note {
+      position: fixed;
+      bottom: max(22px, env(safe-area-inset-bottom));
+      left: 50%; transform: translateX(-50%);
+      padding: 8px 16px; border-radius: 999px;
+      background: rgba(13, 18, 26, 0.74);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: rgba(244,246,248,0.80); font-size: 12px;
+      white-space: nowrap; display: none;
+    }
+    body.no-ar .desktop-note { display: block; }
+  </style>
+</head>
+<body>
+  <div class="top-bar">
+    <a class="back-link" href="./">← Back to Onboard &amp; 3D View</a>
+    <div class="status-pill" id="ar-status">Loading COTA AR…</div>
+  </div>
+
+  <!-- Pure Core glTF 2.0 (4 materials, 0 extensions) + Native USDZ for seamless Android WebXR, Scene Viewer & iOS Quick Look -->
+  <model-viewer
+    id="mv"
+    src="assets/cota_austin_scaled.glb"
+    ios-src="assets/cota_austin_scaled.usdz"
+    poster="assets/poster.png"
+    alt="Full-scale Circuit of the Americas Austin Texas F1 Tabletop AR Diorama"
+    ar
+    ar-modes="webxr scene-viewer quick-look"
+    ar-placement="floor"
+    ar-scale="auto"
+    autoplay
+    camera-controls
+    touch-action="pan-y"
+    camera-orbit="-24deg 56deg 115%"
+    shadow-intensity="1"
+    shadow-softness="0.85"
+    exposure="1.08"
+    tone-mapping="neutral"
+  >
+    <button slot="ar-button" class="ar-btn">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.74 8 12 11.82 5.26 8 12 4.18zM5 9.65l6 3.33v6.54l-6-3.33V9.65zm8 9.87v-6.54l6-3.33v6.54l-6 3.33z"/></svg>
+      Launch Tabletop AR
+    </button>
+  </model-viewer>
+
+  <!-- Direct Android ARCore Scene Viewer fallback (uses com.google.ar.core for non-WebXR browsers) -->
+  <a id="scene-viewer-alt" class="android-alt" href="#">Open in Google Scene Viewer (ARCore)</a>
+  <div class="desktop-note">Open this page in Chrome (Android) or Safari (iPhone) for Tabletop AR</div>
+
+  <script>
+    const mv = document.getElementById('mv');
+    const statusEl = document.getElementById('ar-status');
+    const altBtn = document.getElementById('scene-viewer-alt');
+    const isAndroid = /Android/i.test(navigator.userAgent || '');
+
+    if (isAndroid) {
+      const glbAbs = new URL('assets/cota_austin_scaled.glb', window.location.href).href;
+      altBtn.href = `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glbAbs)}&mode=ar_preferred&resizable=true&title=${encodeURIComponent('F1 COTA Austin Tabletop AR')}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(window.location.href)};end;`;
+      altBtn.classList.add('show');
+    }
+
+    mv.addEventListener('load', () => {
+      if (mv.canActivateAR) {
+        statusEl.textContent = isAndroid ? 'Android WebXR / ARCore Ready' : 'Tabletop AR Ready';
+      } else {
+        statusEl.textContent = '3D Preview Mode';
+        document.body.classList.add('no-ar');
+      }
+    });
+
+    mv.addEventListener('ar-status', (e) => {
+      if (e.detail.status === 'failed') {
+        statusEl.textContent = isAndroid ? 'Try Google Scene Viewer below' : 'AR unavailable on this browser';
+      }
+    });
+  </script>
+</body>
+</html>
