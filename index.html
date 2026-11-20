@@ -156,6 +156,42 @@
       padding: 4px 10px; border-radius: 999px;
       border: 1px solid rgba(255,255,255,0.08);
     }
+
+    /* Live Rough Visual Scale Bar (updates continuously as you zoom, orbit, fly, or ride onboard) */
+    .scale-hud {
+      position: fixed;
+      top: max(60px, calc(env(safe-area-inset-top) + 46px));
+      right: 14px;
+      z-index: 20;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(13, 18, 26, 0.74);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.13);
+      min-width: 124px;
+    }
+    .scale-label { font-size: 12px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+    .scale-sub { font-size: 10px; color: rgba(244,246,248,0.72); white-space: nowrap; }
+    .scale-bar-wrap { display: flex; align-items: flex-end; justify-content: flex-end; height: 10px; margin: 1px 0; }
+    .scale-bar {
+      width: 96px; height: 8px;
+      border-left: 2px solid #fff;
+      border-right: 2px solid #fff;
+      border-bottom: 2.5px solid #e10600;
+      position: relative;
+      transition: width 0.07s linear;
+    }
+    .scale-bar::after {
+      content: ""; position: absolute; left: 50%; bottom: 0;
+      width: 1.5px; height: 5px; background: rgba(255,255,255,0.68);
+      transform: translateX(-50%);
+    }
     @media (max-width: 640px) { .keys-hint { display: none; } }
   </style>
   <script type="importmap">
@@ -200,11 +236,17 @@
     </div>
   </div>
 
+  <div class="scale-hud" id="scale-hud">
+    <div class="scale-label" id="scale-label">~50 m track</div>
+    <div class="scale-bar-wrap"><div class="scale-bar" id="scale-bar"></div></div>
+    <div class="scale-sub" id="scale-sub">~9 F1 cars · ~19 cm table</div>
+  </div>
+
   <div class="hud-bottom">
     <div class="bottom-actions">
       <!-- Native iOS Quick Look 1-tap anchor (shown on iPhone/iPad) -->
-      <a id="ios-ar-link" rel="ar" href="assets/cota_austin_scaled.usdz?v=2" class="ar-btn" style="display:none;">
-        <img src="assets/poster.png?v=2" alt="" style="display:none;" />
+      <a id="ios-ar-link" rel="ar" href="assets/cota_austin_scaled.usdz?v=3" class="ar-btn" style="display:none;">
+        <img src="assets/poster.png?v=3" alt="" style="display:none;" />
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.74 8 12 11.82 5.26 8 12 4.18zM5 9.65l6 3.33v6.54l-6-3.33V9.65zm8 9.87v-6.54l6-3.33v6.54l-6 3.33z"/></svg>
         Place on Table (AR)
       </a>
@@ -472,7 +514,7 @@
     const gltfLoader = new GLTFLoader();
 
     gltfLoader.load(
-      'assets/cota_austin_scaled.glb?v=2',
+      'assets/cota_austin_scaled.glb?v=3',
       (gltf) => {
         const root = gltf.scene;
         root.traverse((obj) => {
@@ -570,6 +612,54 @@
       camera.lookAt(_smoothLook);
     }
 
+    // Live Rough Visual Scale Bar updater (works continuously in Tabletop Orbit, WASD Fly, Onboard & Chase!)
+    const scaleBarEl = document.getElementById('scale-bar');
+    const scaleLabelEl = document.getElementById('scale-label');
+    const scaleSubEl = document.getElementById('scale-sub');
+    const REAL_M_TO_MODEL = 0.0038; // 1:263 true trackside scale
+    const NICE_STEPS_M = [2, 5, 10, 20, 25, 50, 100, 200, 250, 500];
+
+    function updateVisualScale() {
+      let distModel = 1.5;
+      if (camMode === 'orbit') {
+        distModel = Math.max(0.05, camera.position.distanceTo(controls.target));
+      } else if (camMode === 'chase') {
+        distModel = Math.max(0.02, camera.position.distanceTo(_carPos));
+      } else {
+        // Onboard T-Cam: reference ~18m real ahead on track (6.8cm model) so road width & nearby cars scale naturally
+        distModel = 18.0 * REAL_M_TO_MODEL;
+      }
+
+      const pxPerModelMeter = window.innerHeight / (2.0 * distModel * Math.tan(THREE.MathUtils.degToRad(camera.fov * 0.5)));
+      const pxPerRealMeter = pxPerModelMeter * REAL_M_TO_MODEL;
+      if (pxPerRealMeter <= 0) return;
+
+      const targetPx = 104;
+      let bestM = 50, bestErr = Infinity;
+      for (const m of NICE_STEPS_M) {
+        const w = m * pxPerRealMeter;
+        if (w >= 54 && w <= 170) {
+          const err = Math.abs(w - targetPx);
+          if (err < bestErr) { bestErr = err; bestM = m; }
+        }
+      }
+      if (bestErr === Infinity) {
+        bestM = (targetPx / pxPerRealMeter < 5) ? 2 : 500;
+      }
+
+      const barPx = Math.max(44, Math.min(180, Math.round(bestM * pxPerRealMeter)));
+      const cars = Math.max(0.4, bestM / 5.4);
+      const carsStr = cars < 2 ? `${cars.toFixed(1)} F1 car` : `~${Math.round(cars)} F1 cars`;
+      const tableCm = bestM * REAL_M_TO_MODEL * 100;
+      const tableStr = tableCm >= 100 ? `~${(tableCm / 100).toFixed(1)} m` : `~${Math.round(tableCm)} cm`;
+
+      scaleBarEl.style.width = `${barPx}px`;
+      scaleLabelEl.textContent = `~${bestM} m track`;
+      scaleSubEl.textContent = camMode === 'orbit'
+        ? `${carsStr} · ${tableStr} table`
+        : `${carsStr} · ${camMode === 'onboard' ? '1:1 cockpit ref' : 'chase ref'}`;
+    }
+
     const clock = new THREE.Clock();
     function animate() {
       requestAnimationFrame(animate);
@@ -583,6 +673,7 @@
       } else {
         updateCarCamera(dt);
       }
+      updateVisualScale();
       renderer.render(scene, camera);
     }
     animate();
